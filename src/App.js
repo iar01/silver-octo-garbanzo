@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react'
 import header from './header.png'
 import { useDispatch, useSelector } from 'react-redux'
 import { fetchRoom } from './redux/RoomsSlice'
-import { Button, Modal } from 'react-bootstrap'
+import { Badge, Button, Modal } from 'react-bootstrap'
 import { createBooking } from './redux/BookingSlice'
+import moment from 'moment/moment'
 
 function App() {
   const dispatch = useDispatch()
@@ -13,6 +14,8 @@ function App() {
   const [selectedImage, setSelectedImage] = useState(null)
   const [isToggled, setIsToggled] = useState(false)
   const [name, setName] = useState(null)
+  const [email, setEmail] = useState(null)
+  const [selectedDate, setSelectedDate] = useState('') // Initial state
 
   const [username, setUserName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -78,6 +81,7 @@ function App() {
       room: selectedRoom.id,
       start_time: startTime,
       end_time: endTime,
+      Email: email,
     }
     dispatch(createBooking(bookingData))
   }
@@ -113,15 +117,46 @@ function App() {
     return maxEndTimeUTC.toISOString().slice(0, -5)
   }
 
+  const handleDateChange = event => {
+    setSelectedDate(event.target.value)
+  }
+
+  function isRoomFullyAvailable(room, selectedDate) {
+    const selectedDateOnly = selectedDate.slice(0, 10)
+    const bookingsOnSelectedDate = room.booked_slots.filter(
+      slot => slot.date.slice(0, 10) === selectedDateOnly,
+    )
+
+    if (bookingsOnSelectedDate.length === 0) {
+      return 'fully'
+    } else {
+      // Calculate total booked hours
+      const totalBookedHours = bookingsOnSelectedDate.reduce((total, slot) => {
+        const startTime = new Date(slot.start_time)
+        const endTime = new Date(slot.end_time)
+        const durationInHours = (endTime - startTime) / (1000 * 60 * 60)
+        return total + durationInHours
+      }, 0)
+
+      return totalBookedHours >= 24 ? 'not available' : 'partial'
+    }
+  }
+
   return (
     <div id='wrapper' className={isToggled ? 'toggled' : ''}>
       {/* Sidebar */}
       <div id='sidebar-wrapper'>
         <div className='sidebar-header'>
           <h4>{name}</h4>
+          <input
+            type='date'
+            className='form-control'
+            id='date-picker'
+            onChange={handleDateChange}
+          />
         </div>
 
-        {name && (
+        {name && selectedDate && (
           <div className='floors-list'>
             {Object.entries(
               groupRoomsByFloor(filterRoomsByBuilding(rooms, name)),
@@ -141,7 +176,18 @@ function App() {
                             onClick={() => handleRoomClick(room)}
                           >
                             <i
-                              className={`fa ${room.is_booked ? 'fa-calendar-times-o booked' : 'fa-calendar-check-o available'}`}
+                              className={`fa  
+                                 ${
+                                   isRoomFullyAvailable(room, selectedDate) ===
+                                   'fully'
+                                     ? 'fa-calendar-check-o text-success'
+                                     : isRoomFullyAvailable(
+                                           room,
+                                           selectedDate,
+                                         ) === 'partial'
+                                       ? 'fa-calendar-minus-o text-warning'
+                                       : 'fa-calendar-times-o text-danger'
+                                 }`}
                               aria-hidden='true'
                             ></i>
                           </button>
@@ -286,6 +332,21 @@ function App() {
                   required
                 />
               </div>
+
+              <div className='mb-3'>
+                <label htmlFor='name' className='form-label'>
+                  Email
+                </label>
+                <input
+                  type='email'
+                  className='form-control'
+                  id='email'
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
               <div className='mb-3'>
                 <label htmlFor='phoneNumber' className='form-label'>
                   Phone Number
@@ -327,6 +388,32 @@ function App() {
                   min={startTime} // Restrict minimum selectable time
                   max={calculateMaxTime(startTime)} // Dynamically calculate max time
                 />
+              </div>
+              {selectedRoom.booked_slots.length === 0 ? (
+                ''
+              ) : (
+                <p>
+                  {' '}
+                  Booked Slots on <b>{selectedDate}</b>
+                </p>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  flexWrap: 'wrap',
+                  marginBottom: '12px',
+                }}
+              >
+                {selectedRoom.booked_slots.map(item => (
+                  <div key={item.id}>
+                    <Badge pill bg='success' className='me-2'>
+                      {moment(item.start_time).format('h:mm a')} -{' '}
+                      {moment(item.end_time).format('h:mm a')}
+                    </Badge>
+                  </div>
+                ))}
               </div>
               <div className='modal-footer'>
                 <button
